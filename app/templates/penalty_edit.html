@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-6 max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">Edit Penalty</h1>
+    
+    <form method="POST" action="/penalties/{{ penalty.id }}">
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Reason</label>
+                <select name="reason" class="w-full border p-2 rounded">
+                    <option value="Getränke" {% if penalty.reason == "Getränke" %}selected{% endif %}>Getränke</option>
+                    <option value="Tape" {% if penalty.reason == "Tape" %}selected{% endif %}>Tape</option>
+                    <option value="Guthaben Rest" {% if penalty.reason == "Guthaben Rest" %}selected{% endif %}>Guthaben Rest</option>
+                </select>
+            </div>
+            
+            <div class="flex gap-4">
+                <button type="submit" 
+                        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Save Changes
+                </button>
+                <a href="/" 
+                   class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">
+                    Cancel
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

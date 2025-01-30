@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ openSection: 'overview' }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handball Team Manager</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.13.5" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-gray-50">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-md fixed h-full">
+            <div class="p-4">
+                <h2 class="text-xl font-bold mb-6">HSG WBW Management</h2>
+                <nav class="space-y-2">
+                    <a href="/" class="block p-2 hover:bg-gray-100 rounded" @click="openSection = 'overview'">🏠 Overview</a>
+                    <a href="/penalties" class="block p-2 hover:bg-gray-100 rounded" @click="openSection = 'penalties'">⚖️ Penalties</a>
+                    <a href="/users" class="block p-2 hover:bg-gray-100 rounded" @click="openSection = 'users'">👥 Players</a>
+                    <a href="/import" class="block p-2 hover:bg-gray-100 rounded" @click="openSection = 'import'">📤 Import</a>
+                    <div class="pt-4 border-t">
+                        <a href="/users/new" class="block p-2 text-green-600 hover:bg-gray-100 rounded">➕ Add Player</a>
+                        <a href="/penalties/new" class="block p-2 text-green-600 hover:bg-gray-100 rounded">➕ Add Penalty</a>
+                    </div>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="ml-64 p-8 w-full">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

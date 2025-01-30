@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-6">
+    <!-- Summary Section -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+        <div class="p-4 bg-red-50 rounded-lg">
+            <h3 class="text-sm font-semibold text-red-800">Total Open Penalties</h3>
+            <p class="text-2xl font-bold">{{ total_open }} ({{ "%.2f"|format(total_open_sum) }}€)</p>
+        </div>
+        <div class="p-4 bg-blue-50 rounded-lg">
+            <h3 class="text-sm font-semibold text-blue-800">Total Paid</h3>
+            <p class="text-2xl font-bold">{{ total_paid }} ({{ "%.2f"|format(total_paid_sum) }}€)</p>
+        </div>
+    </div>
+
+    <!-- Players Table -->
+    {% if users %}
+    <table class="w-full border-collapse">
+        <thead>
+            <tr class="bg-gray-100">
+                <th class="p-3 text-left">Player</th>
+                <th class="p-3 text-left">Total Debt</th>
+                <th class="p-3 text-left">Total Credit</th>
+                <th class="p-3 text-left">Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr class="border-t">
+                <td class="p-3">
+                    <a href="/users/{{ user.id }}" class="text-blue-500 hover:text-blue-700">
+                        {{ user.full_name }}
+                    </a>
+                </td>
+                <td class="p-3">{{ "%.2f"|format(user.total_debt) }}€</td>
+                <td class="p-3">{{ "%.2f"|format(user.total_credit) }}€</td>
+                <td class="p-3">
+                    <span class="px-3 py-1 rounded-full 
+                        {% if user.balance_status == 'overdue' %}bg-red-100 text-red-800
+                        {% else %}bg-green-100 text-green-800{% endif %}">
+                        {{ "%.2f"|format(user.balance|abs) }}€
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 bg-yellow-100 text-yellow-800 rounded-lg">
+        No players found. <a href="/users/new" class="text-blue-500">Add a player</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

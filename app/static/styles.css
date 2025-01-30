@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+[x-cloak] { display: none !important; }
+
+.sidebar {
+    transition: all 0.3s;
+}
+
+.balance-positive {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.balance-negative {
+    background-color: #dcfce7;
+    color: #16a34a;
+}

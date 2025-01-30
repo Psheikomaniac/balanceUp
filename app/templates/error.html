@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h1 class="text-2xl font-bold text-red-600 mb-4">Error: {{ error }}</h1>
+    {% if details %}
+    <div class="mb-4 p-4 bg-red-50 rounded-lg">
+        <pre class="text-sm text-red-700 whitespace-pre-wrap">{{ details }}</pre>
+    </div>
+    {% endif %}
+    <a href="/" class="text-blue-500 hover:text-blue-700">&larr; Back to main page</a>
+</div>
+{% endblock %}

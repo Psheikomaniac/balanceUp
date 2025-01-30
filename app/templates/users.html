@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-6">
+    <h1 class="text-2xl font-bold mb-6">All Players</h1>
+    
+    <a href="/users/new" class="bg-green-500 text-white px-4 py-2 rounded mb-4 inline-block hover:bg-green-600">
+        + Add New Player
+    </a>
+
+    <table class="w-full border-collapse">
+        <thead>
+            <tr class="bg-gray-100">
+                <th class="p-3 text-left">Name</th>
+                <th class="p-3 text-left">Open Penalties</th>
+                <th class="p-3 text-left">Last Activity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr class="border-t">
+                <td class="p-3">
+                    <a href="/users/{{ user.id }}" class="text-blue-500 hover:text-blue-700">
+                        {{ user.full_name }}
+                    </a>
+                </td>
+                <td class="p-3">{{ user.penalties|selectattr('paid_date', 'none')|list|length }}</td>
+                <td class="p-3">
+                    {% if user.penalties %}
+                        {{ user.penalties|sort(attribute='created_date')|last.created_date }}
+                    {% else %}
+                        Never
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
