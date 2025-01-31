@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlmodel import Session
 from app.models import Penalty
+from app.models import User
 from app.database import get_db
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates

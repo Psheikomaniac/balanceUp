@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from typing import List, Optional
 from pydantic import computed_field
+from app.models import Team
 
 class UserBase(SQLModel):
     full_name: str = Field(index=True)
