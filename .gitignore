@@ -1,0 +1,27 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Database files
+app/database/penalties.db
+database/penalties.db
+
+# App cashbox folder
+app/cashbox/
+
+# Specific files to exclude
+app/main.py
+
+# IDE specific files
+.idea/
+.vscode/
+
+# OS specific files
+.DS_Store
