@@ -1,8 +1,14 @@
 # services/user_utils.py
 
 import sqlite3
-from ..database.models import get_db_connection
+import os
 
+def get_db_connection():
+    """Get a connection to the SQLite database"""
+    db_path = os.path.join('database', 'penalties.db')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def display_user_ids(db_path: str):
     """
