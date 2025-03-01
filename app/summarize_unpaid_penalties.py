@@ -8,8 +8,13 @@ from typing import Dict, List, Tuple, Set
 # Add the project root to Python path to access app modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import the database connection function from app.database.models
-from app.database.models import get_db_connection
+# Define our own db connection function instead of importing it
+def get_db_connection():
+    """Get a connection to the SQLite database"""
+    db_path = os.path.join('database', 'penalties.db')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def get_unpaid_penalties() -> List[Tuple[str, float, Dict[str, int]]]:
     """
