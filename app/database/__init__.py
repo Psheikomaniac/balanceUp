@@ -1,6 +1,54 @@
 import sqlite3
 import logging
 import os
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy import create_engine
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models"""
+    pass
+
+engine = None
+SessionLocal = None
+
+def get_engine():
+    """Get or create SQLAlchemy engine"""
+    global engine
+    if engine is None:
+        from app.config.settings import get_settings
+        settings = get_settings()
+        
+        # Ensure database directory exists for SQLite
+        if not settings.DATABASE_URL.startswith("sqlite:///:memory:"):
+            db_dir = os.path.dirname(settings.DATABASE_URL.replace('sqlite:///', ''))
+            os.makedirs(db_dir, exist_ok=True)
+        
+        engine = create_engine(
+            settings.DATABASE_URL,
+            connect_args={"check_same_thread": False}
+        )
+    return engine
+
+def get_session():
+    """Get SQLAlchemy session maker"""
+    global SessionLocal
+    if SessionLocal is None:
+        engine = get_engine()
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return SessionLocal
+
+def get_db():
+    """Get database session"""
+    SessionLocal = get_session()
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Import these after Base is defined to avoid circular imports
+from app.database.models import User, Penalty, Transaction, AuditLog
+from app.database.crud import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

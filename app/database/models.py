@@ -1,15 +1,11 @@
-import os
 from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
+import os
 
-from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey, Text, create_engine
+from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey, Text, create_engine, Index
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-
 from app.database import Base
-
-Base = declarative_base()
 
 class User(Base):
     """User model for storing user information"""
@@ -24,8 +20,12 @@ class User(Base):
     
     # Relationships
     penalties = relationship("Penalty", back_populates="user", cascade="all, delete-orphan")
-    transactions = relationship("Transaction", back_populates="user")
+    transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     
+    __table_args__ = (
+        Index('idx_user_search', 'name', 'email'),  # Composite index for search queries
+    )
+
     def __repr__(self) -> str:
         return f"<User(id={self.id}, name={self.name})>"
     
@@ -56,6 +56,11 @@ class Penalty(Base):
     # Relationships
     user = relationship("User", back_populates="penalties")
     
+    __table_args__ = (
+        Index('idx_penalty_status', 'user_id', 'paid'),  # Composite index for filtering penalties by status
+        Index('idx_penalty_date', 'user_id', 'date'),    # Composite index for date-based queries
+    )
+
     def __repr__(self) -> str:
         return f"<Penalty(id={self.penalty_id}, user={self.user_id}, amount={self.amount}, paid={self.paid})>"
     
@@ -78,6 +83,10 @@ class Transaction(Base):
     # Relationships
     user = relationship("User", back_populates="transactions")
     
+    __table_args__ = (
+        Index('idx_transaction_date', 'user_id', 'transaction_date'),  # Composite index for date-based queries
+    )
+
     def __repr__(self) -> str:
         return f"<Transaction(id={self.transaction_id}, user={self.user_id}, amount={self.amount})>"
 
@@ -89,13 +98,17 @@ class AuditLog(Base):
     action = Column(String(50), nullable=False)
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(36), nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     details = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     user = relationship("User")
     
+    __table_args__ = (
+        Index('idx_audit_search', 'action', 'entity_type', 'timestamp'),  # Composite index for audit queries
+    )
+
     def __repr__(self) -> str:
         return f"<AuditLog(id={self.log_id}, action={self.action}, entity={self.entity_type})>"
 

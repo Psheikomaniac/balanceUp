@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
 from typing import Optional
 import os
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     
     # Security settings
-    SECRET_KEY: str = Field(default="development_secret_key", env="SECRET_KEY")
+    SECRET_KEY: str = Field(default="development_secret_key")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
     # Rate limiting
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         if v <= 0:
             raise ValueError(f"{info.field_name} must be greater than 0")
         return v
-    
+
     # Environment-specific configuration
     @property
     def is_development(self) -> bool:
@@ -49,11 +49,11 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return os.getenv("ENVIRONMENT", "development").lower() == "production"
 
-    model_config = {
-        "env_file": ".env",
-        "case_sensitive": True,
-        "extra": "allow"
-    }
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="allow"
+    )
 
 _settings = None
 

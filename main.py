@@ -1,44 +1,38 @@
-import os
-import sys
 import logging
-from app.utils.logging_config import setup_logging
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException
-from app.routers import penalties, users
-from app.database.models import init_db
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.config.settings import get_settings
 from app.utils.logging_config import setup_logging
-from app.middleware.rate_limiter import setup_rate_limiting
-from app.errors.handlers import (
-    api_exception_handler,
-    validation_exception_handler,
-    unhandled_exception_handler
-)
-from app.errors.exceptions import BaseAPIException, ValidationError
+from app.middleware.rate_limiter import RateLimitMiddleware
+from app.database import get_engine
+from app.errors.handlers import register_error_handlers
+from app.database.models import init_db
+from app.routers import users_router, penalties_router, transactions_router
 
 # Initialize settings and logging
 settings = get_settings()
-from app.utils.logging_config import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="API for managing penalties and users.",
-    version=settings.VERSION,
     debug=settings.DEBUG
 )
 
-# Set up rate limiting
-setup_rate_limiting(app)
+# Add middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(RateLimitMiddleware)
 
-# Register exception handlers
-app.add_exception_handler(BaseAPIException, api_exception_handler)
-app.add_exception_handler(ValidationError, validation_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)  # Handle FastAPI validation errors
-app.add_exception_handler(HTTPException, api_exception_handler)  # Handle 404 and other HTTP errors
-app.add_exception_handler(Exception, unhandled_exception_handler)
+# Register error handlers
+register_error_handlers(app)
 
 @app.on_event("startup")
 async def startup_event():
@@ -52,8 +46,9 @@ async def shutdown_event():
     logger.info("Shutting down API service")
 
 # Include routers
-app.include_router(penalties.router, prefix=settings.API_V1_STR)
-app.include_router(users.router, prefix=settings.API_V1_STR)
+app.include_router(users_router)
+app.include_router(penalties_router)
+app.include_router(transactions_router)
 
 if __name__ == "__main__":
     import uvicorn
