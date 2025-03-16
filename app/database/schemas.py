@@ -1,90 +1,109 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List
 from datetime import datetime
-import uuid
+from typing import Optional, List
+from pydantic import BaseModel, EmailStr, constr, confloat
 
-class PenaltyBase(BaseModel):
-    """Base model for penalty data"""
-    amount: float = Field(..., gt=0, description="Penalty amount (must be greater than 0)")
-    reason: Optional[str] = Field(None, description="Reason for the penalty")
-    date: Optional[datetime] = Field(None, description="Date when the penalty was issued")
-
-class PenaltyCreate(PenaltyBase):
-    """Model for creating a penalty"""
-    user_id: str = Field(..., description="ID of the user who received the penalty")
-
-class PenaltyUpdate(BaseModel):
-    """Model for updating a penalty"""
-    amount: Optional[float] = Field(None, gt=0, description="Updated penalty amount")
-    reason: Optional[str] = Field(None, description="Updated reason for the penalty")
-    date: Optional[datetime] = Field(None, description="Updated date of the penalty")
-    paid: Optional[bool] = Field(None, description="Whether the penalty has been paid")
-
-    @validator('amount')
-    def amount_must_be_positive(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError('Amount must be greater than 0')
-        return v
-
-class PenaltyResponse(PenaltyBase):
-    """Model for penalty responses"""
-    penalty_id: str
-    user_id: str
-    paid: bool
-    paid_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        orm_mode = True
-        
+# User schemas
 class UserBase(BaseModel):
-    """Base model for user data"""
-    name: str = Field(..., min_length=1, max_length=100, description="User's name")
-    email: Optional[str] = Field(None, description="User's email address")
-    phone: Optional[str] = Field(None, description="User's phone number")
+    name: constr(min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
 
 class UserCreate(UserBase):
-    """Model for creating a user"""
     pass
 
 class UserUpdate(BaseModel):
-    """Model for updating a user"""
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="Updated name")
-    email: Optional[str] = Field(None, description="Updated email address")
-    phone: Optional[str] = Field(None, description="Updated phone number")
+    name: Optional[constr(min_length=1, max_length=100)] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
 
-class UserResponse(UserBase):
-    """Model for user responses"""
+class User(UserBase):
     id: str
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         orm_mode = True
 
-class UserWithPenalties(UserResponse):
-    """User model with penalties included"""
-    penalties: List[PenaltyResponse] = []
-    
+# Penalty schemas
+class PenaltyBase(BaseModel):
+    user_id: str
+    amount: confloat(gt=0)
+    reason: Optional[str] = None
+    date: Optional[datetime] = None
+
+class PenaltyCreate(PenaltyBase):
+    pass
+
+class PenaltyUpdate(BaseModel):
+    amount: Optional[confloat(gt=0)] = None
+    reason: Optional[str] = None
+    paid: Optional[bool] = None
+
+class Penalty(PenaltyBase):
+    penalty_id: str
+    paid: bool
+    paid_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
     class Config:
         orm_mode = True
 
+# Transaction schemas
 class TransactionBase(BaseModel):
-    """Base model for transaction data"""
-    amount: float = Field(..., gt=0, description="Transaction amount")
-    description: Optional[str] = Field(None, description="Transaction description")
-    transaction_date: Optional[datetime] = Field(None, description="Transaction date")
+    user_id: str
+    amount: confloat(gt=0)
+    description: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 class TransactionCreate(TransactionBase):
-    """Model for creating a transaction"""
-    user_id: str = Field(..., description="ID of the user associated with the transaction")
+    pass
 
-class TransactionResponse(TransactionBase):
-    """Model for transaction responses"""
+class Transaction(TransactionBase):
     transaction_id: str
-    user_id: str
     created_at: datetime
-    
+
     class Config:
         orm_mode = True
+
+# Audit log schemas
+class AuditLogBase(BaseModel):
+    action: str
+    entity_type: str
+    entity_id: Optional[str] = None
+    user_id: Optional[str] = None
+    details: Optional[str] = None
+
+class AuditLogCreate(AuditLogBase):
+    pass
+
+class AuditLog(AuditLogBase):
+    log_id: str
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+# Summary schemas
+class PenaltySummary(BaseModel):
+    total_count: int
+    paid_count: int
+    unpaid_count: int
+    total_amount: float
+    paid_amount: float
+    unpaid_amount: float
+
+class UserBalance(BaseModel):
+    user_id: str
+    total_unpaid: float
+
+# Response schemas
+class StandardResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[dict] = None
+
+class ErrorResponse(BaseModel):
+    success: bool = False
+    error: str
+    details: Optional[dict] = None

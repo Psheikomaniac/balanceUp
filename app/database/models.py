@@ -2,11 +2,13 @@ import os
 from datetime import datetime
 from typing import List, Optional
 from uuid import uuid4
-from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
 
-# Import Base directly to avoid circular import
+from sqlalchemy import Column, String, Float, Boolean, DateTime, ForeignKey, Text, create_engine
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+
+from app.database import Base
+
 Base = declarative_base()
 
 class User(Base):
@@ -22,6 +24,7 @@ class User(Base):
     
     # Relationships
     penalties = relationship("Penalty", back_populates="user", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="user")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, name={self.name})>"
@@ -73,7 +76,7 @@ class Transaction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    user = relationship("User")
+    user = relationship("User", back_populates="transactions")
     
     def __repr__(self) -> str:
         return f"<Transaction(id={self.transaction_id}, user={self.user_id}, amount={self.amount})>"
@@ -86,9 +89,12 @@ class AuditLog(Base):
     action = Column(String(50), nullable=False)
     entity_type = Column(String(50), nullable=False)
     entity_id = Column(String(36), nullable=True)
-    user_id = Column(String(36), nullable=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     details = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
     
     def __repr__(self) -> str:
         return f"<AuditLog(id={self.log_id}, action={self.action}, entity={self.entity_type})>"
