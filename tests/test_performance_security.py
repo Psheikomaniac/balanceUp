@@ -1,11 +1,11 @@
 import pytest
 import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
-from typing import List
 import json
 import logging
 from fastapi import status
+from concurrent.futures import ThreadPoolExecutor
+from typing import List
 
 @pytest.mark.performance
 class TestApiPerformance:
@@ -14,7 +14,7 @@ class TestApiPerformance:
         """Test API performance under concurrent load"""
         async def make_request():
             return client.get("/api/v1/users/1")
-        
+            
         # Create test user first
         client.post("/api/v1/users/", json=test_user)
         
@@ -38,24 +38,34 @@ class TestApiPerformance:
 
     def test_database_performance(self, client, test_user, test_penalty):
         """Test database operation performance"""
-        # Create test user
-        client.post("/api/v1/users/", json=test_user)
-        
-        # Measure bulk penalty creation performance
-        penalties = [
-            {**test_penalty, "reason": f"Test Penalty {i}"}
-            for i in range(100)
-        ]
-        
+        # Create a batch of users and penalties
+        users = []
         start_time = time.time()
-        for penalty in penalties:
-            response = client.post("/api/v1/penalties/", json=penalty)
-            assert response.status_code in (201, 429)  # Account for rate limiting
+        
+        for i in range(100):
+            user_data = {
+                "username": f"testuser{i}",
+                "email": f"test{i}@example.com"
+            }
+            response = client.post("/api/v1/users/", json=user_data)
+            assert response.status_code == 201
+            users.append(response.json())
+        
+        end_time = time.time()
+        batch_insert_time = end_time - start_time
+        
+        # Batch insert should be reasonably fast
+        assert batch_insert_time < 2.0  # 100 inserts should take less than 2 seconds
+        
+        # Test batch read performance
+        start_time = time.time()
+        for user in users:
+            response = client.get(f"/api/v1/users/{user['id']}")
+            assert response.status_code == 200
         end_time = time.time()
         
-        # Assert bulk operation performance
-        total_time = end_time - start_time
-        assert total_time < 10.0  # Should handle 100 creations within 10 seconds
+        batch_read_time = end_time - start_time
+        assert batch_read_time < 1.0  # Reading should be faster than writing
 
 @pytest.mark.security
 class TestApiSecurity:
@@ -75,7 +85,7 @@ class TestApiSecurity:
         with caplog.at_level(logging.ERROR):
             response = client.post(
                 "/api/v1/users/",
-                json={"password": "secret123", "email": "test@example.com"}
+                json={"username": "test", "password": "secret123", "email": "test@example.com"}
             )
             
             # Check logs don't contain sensitive data
@@ -84,26 +94,56 @@ class TestApiSecurity:
             
             # But should still contain necessary error information
             if response.status_code >= 400:
-                assert "error" in log_text
+                assert "error" in log_text.lower()
 
-    def test_rate_limit_bypass_prevention(self, client, test_settings):
+    def test_rate_limit_bypass_prevention(self, client, settings):
         """Test that rate limiting can't be bypassed with different headers"""
-        headers_variations = [
-            {},
+        # Try common headers used to spoof IP addresses
+        headers = [
             {"X-Forwarded-For": "1.2.3.4"},
             {"X-Real-IP": "1.2.3.4"},
-            {"User-Agent": "Custom-Agent"}
+            {"CF-Connecting-IP": "1.2.3.4"},
+            {"True-Client-IP": "1.2.3.4"}
         ]
         
-        # Try to bypass rate limit with different headers
-        for headers in headers_variations:
-            # Make requests up to the limit
-            for _ in range(test_settings.RATE_LIMIT_MAX_REQUESTS):
-                client.get("/api/v1/users/1", headers=headers)
-            
-            # Next request should still be rate limited
-            response = client.get("/api/v1/users/1", headers=headers)
+        # Exhaust rate limit
+        for _ in range(settings.RATE_LIMIT_MAX_REQUESTS + 1):
+            response = client.get("/api/v1/users/1")
+        assert response.status_code == 429
+        
+        # Try each header, should still be rate limited
+        for header in headers:
+            response = client.get("/api/v1/users/1", headers=header)
             assert response.status_code == 429
+
+    def test_structured_error_responses(self, client):
+        """Test that error responses follow a consistent structure"""
+        # Test various error scenarios
+        error_cases = [
+            # 404 Not Found
+            ("/api/v1/users/999", "GET", None),
+            # 422 Validation Error
+            ("/api/v1/users/", "POST", {"invalid": "data"}),
+            # 429 Rate Limit
+            ("/api/v1/users/1", "GET", None, settings.RATE_LIMIT_MAX_REQUESTS + 1)
+        ]
+        
+        for path, method, data, repeat_count in error_cases:
+            if repeat_count:
+                for _ in range(repeat_count):
+                    if method == "GET":
+                        response = client.get(path)
+                    else:
+                        response = client.post(path, json=data)
+            else:
+                if method == "GET":
+                    response = client.get(path)
+                else:
+                    response = client.post(path, json=data)
             
-            # Wait for rate limit to reset
-            time.sleep(test_settings.RATE_LIMIT_WINDOW + 1)
+            error_data = response.json()
+            # All errors should have a consistent structure
+            assert "detail" in error_data
+            assert isinstance(error_data["detail"], (str, list))
+            if response.status_code == 429:
+                assert "Retry-After" in response.headers

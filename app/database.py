@@ -1,8 +1,31 @@
 import sqlite3
 import logging
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from app.config.settings import get_settings
+from app.database.models import Base
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+settings = get_settings()
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def init_db():
+    """Initialize database tables"""
+    Base.metadata.create_all(bind=engine)
+
+def get_db() -> Session:
+    """Get database session"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def get_db_connection():
     conn = sqlite3.connect('database/penalties.db')

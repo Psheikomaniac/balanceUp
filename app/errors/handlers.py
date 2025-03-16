@@ -1,55 +1,84 @@
-import logging
-from fastapi import Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
-from .exceptions import BaseAPIException, ValidationError, AuthenticationError, NotFoundError, RateLimitError
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from app.utils.logging_config import get_logger
+from app.errors.exceptions import (
+    ResourceNotFoundException, 
+    DuplicateResourceException,
+    UnauthorizedException
+)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-async def api_exception_handler(request: Request, exc: BaseAPIException) -> JSONResponse:
-    """Handle all API exceptions with proper logging"""
-    logger.error(
-        "API error occurred",
-        extra={
-            "path": request.url.path,
-            "method": request.method,
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-            "client_ip": request.client.host if request.client else None,
-        }
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.detail}
-    )
-
-async def validation_exception_handler(request: Request, exc: ValidationError) -> JSONResponse:
-    """Handle validation errors"""
-    logger.warning(
-        "Validation error",
-        extra={
-            "path": request.url.path,
-            "method": request.method,
-            "detail": exc.detail,
-        }
-    )
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"error": "Validation error", "detail": exc.detail}
-    )
-
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle any unhandled exceptions"""
-    logger.error(
-        "Unhandled error occurred",
-        extra={
-            "path": request.url.path,
-            "method": request.method,
-            "error": str(exc),
-            "error_type": type(exc).__name__,
-        },
-        exc_info=True
-    )
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"error": "Internal server error"}
-    )
+def setup_exception_handlers(app: FastAPI):
+    """Configure exception handlers for the FastAPI application"""
+    
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """Handle validation errors in API requests"""
+        logger.warning(f"Validation error: {exc.errors()}")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.errors(),
+                "body": exc.body,
+                "message": "Validation error in request data"
+            }
+        )
+    
+    @app.exception_handler(SQLAlchemyError)
+    async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+        """Handle SQLAlchemy errors"""
+        logger.error(f"Database error: {str(exc)}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": "Database error occurred", "detail": str(exc)}
+        )
+    
+    @app.exception_handler(IntegrityError)
+    async def integrity_exception_handler(request: Request, exc: IntegrityError):
+        """Handle database integrity errors"""
+        logger.error(f"Database integrity error: {str(exc)}")
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"message": "Database integrity error occurred", "detail": str(exc)}
+        )
+    
+    @app.exception_handler(ResourceNotFoundException)
+    async def resource_not_found_handler(request: Request, exc: ResourceNotFoundException):
+        """Handle resource not found errors"""
+        logger.warning(f"Resource not found: {str(exc)}")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"message": str(exc)}
+        )
+    
+    @app.exception_handler(DuplicateResourceException)
+    async def duplicate_resource_handler(request: Request, exc: DuplicateResourceException):
+        """Handle duplicate resource errors"""
+        logger.warning(f"Duplicate resource: {str(exc)}")
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"message": str(exc)}
+        )
+    
+    @app.exception_handler(UnauthorizedException)
+    async def unauthorized_handler(request: Request, exc: UnauthorizedException):
+        """Handle unauthorized access errors"""
+        logger.warning(f"Unauthorized access: {str(exc)}")
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"message": str(exc)}
+        )
+    
+    @app.exception_handler(Exception)
+    async def general_exception_handler(request: Request, exc: Exception):
+        """Handle any unhandled exceptions"""
+        logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": "An unexpected error occurred"}
+        )
+    
+    logger.info("Exception handlers configured")
