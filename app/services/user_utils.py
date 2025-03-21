@@ -2,12 +2,52 @@
 
 from typing import List, Dict, Any, Optional
 import uuid
+import sqlite3
 from sqlalchemy.orm import Session
 
 from app.utils.logging_config import get_logger
 from app.errors.exceptions import ResourceNotFoundException
 
 logger = get_logger(__name__)
+
+def display_user_ids(db_path: str) -> List[tuple]:
+    """
+    Display and return a list of user IDs with their names sorted alphabetically.
+    
+    Args:
+        db_path: Path to the SQLite database file
+        
+    Returns:
+        List of tuples containing (user_id, user_name)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT user_id, user_name FROM users ORDER BY user_name')
+    users = cursor.fetchall()
+    
+    conn.close()
+    return users
+
+def validate_user_id(db_path: str, user_id: int) -> bool:
+    """
+    Validate if a user ID exists in the database.
+    
+    Args:
+        db_path: Path to the SQLite database file
+        user_id: The ID of the user to validate
+        
+    Returns:
+        Boolean indicating whether the user ID exists
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM users WHERE user_id = ?', (user_id,))
+    count = cursor.fetchone()[0]
+    
+    conn.close()
+    return count > 0
 
 class UserUtils:
     """Service for handling user-related operations"""
