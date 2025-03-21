@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from app.database import get_db
 from app.database import crud, schemas
-from app.database.models import get_db
 from app.utils.logging_config import get_logger
 from app.errors.exceptions import ResourceNotFoundException
 

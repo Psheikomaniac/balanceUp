@@ -77,59 +77,125 @@ MIGRATIONS = [
     );
     
     CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_id ON audit_logs(entity_id);
+    """,
+    
+    # Version 4: Add new indexes and constraints
+    """
+    -- Add composite indexes for improved query performance
+    CREATE INDEX IF NOT EXISTS idx_user_search 
+    ON users(name, email);
+    
+    CREATE INDEX IF NOT EXISTS idx_penalty_status 
+    ON penalties(user_id, paid);
+    
+    CREATE INDEX IF NOT EXISTS idx_penalty_date 
+    ON penalties(user_id, date);
+    
+    CREATE INDEX IF NOT EXISTS idx_transaction_date 
+    ON transactions(user_id, transaction_date);
+    
+    CREATE INDEX IF NOT EXISTS idx_audit_search 
+    ON audit_logs(action, entity_type, timestamp);
+    
+    -- Add cascade delete constraints
+    DROP TRIGGER IF EXISTS cascade_delete_penalties;
+    CREATE TRIGGER cascade_delete_penalties
+    AFTER DELETE ON users
+    FOR EACH ROW
+    BEGIN
+        DELETE FROM penalties WHERE user_id = OLD.id;
+        DELETE FROM transactions WHERE user_id = OLD.id;
+    END;
+    
+    -- Add trigger to update timestamps
+    DROP TRIGGER IF EXISTS update_user_timestamp;
+    CREATE TRIGGER update_user_timestamp
+    AFTER UPDATE ON users
+    FOR EACH ROW
+    BEGIN
+        UPDATE users 
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = NEW.id;
+    END;
+    
+    DROP TRIGGER IF EXISTS update_penalty_timestamp;
+    CREATE TRIGGER update_penalty_timestamp
+    AFTER UPDATE ON penalties
+    FOR EACH ROW
+    BEGIN
+        UPDATE penalties 
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE penalty_id = NEW.penalty_id;
+    END;
     """
 ]
 
 def get_current_version(db: Session) -> int:
-    """Get the current database schema version."""
+    """Get the current database schema version"""
     try:
         result = db.execute(text("SELECT MAX(version) FROM schema_version")).scalar()
         return result or 0
     except Exception:
         return 0
 
-def apply_migration(db: Session, version: int, script: str):
-    """Apply a single migration script."""
-    try:
-        # Execute the migration script
-        for statement in script.strip().split(';'):
-            if statement.strip():
-                db.execute(text(statement))
-        
-        # Record the migration
-        db.execute(
-            text("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)"),
-            {"version": version, "applied_at": datetime.utcnow()}
-        )
-        db.commit()
-        
-        logger.info(f"Successfully applied migration version {version}")
-        return True
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error applying migration version {version}: {str(e)}")
-        raise
+def record_migration(db: Session, version: int):
+    """Record that a migration has been applied"""
+    db.execute(
+        text("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)"),
+        {"version": version, "applied_at": datetime.utcnow()}
+    )
+    db.commit()
 
-def migrate_db():
+def migrate_db(db: Session, target_version: Optional[int] = None) -> None:
     """
-    Migrate the database to the latest version.
-    """
-    engine = create_engine(settings.DATABASE_URL)
+    Apply database migrations
     
-    # Create all tables using SQLAlchemy models
+    Args:
+        db: The database session
+        target_version: Optional specific version to migrate to
+    """
+    current_version = get_current_version(db)
+    if target_version is None:
+        target_version = len(MIGRATIONS)
+    
+    if current_version >= target_version:
+        logger.info(f"Database is already at version {current_version}")
+        return
+    
+    logger.info(f"Current database version: {current_version}")
+    logger.info(f"Target database version: {target_version}")
+    
+    for version, migration in enumerate(MIGRATIONS[current_version:target_version], start=current_version + 1):
+        logger.info(f"Applying migration version {version}...")
+        try:
+            # Split migration into individual statements
+            statements = [s.strip() for s in migration.split(';') if s.strip()]
+            for statement in statements:
+                db.execute(text(statement))
+            
+            record_migration(db, version)
+            db.commit()
+            logger.info(f"Successfully applied migration version {version}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error applying migration version {version}: {str(e)}")
+            raise
+
+def init_db():
+    """Initialize database and run migrations"""
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+    
+    # Create all tables
     Base.metadata.create_all(bind=engine)
     
-    with Session(engine) as db:
-        current_version = get_current_version(db)
-        logger.info(f"Current database version: {current_version}")
-        
-        for version, script in enumerate(MIGRATIONS, start=1):
-            if version > current_version:
-                logger.info(f"Applying migration version {version}...")
-                apply_migration(db, version, script)
-        
-        final_version = get_current_version(db)
-        logger.info(f"Database migration complete. Final version: {final_version}")
+    # Run migrations
+    with Session(engine) as session:
+        migrate_db(session)
+    
+    return engine
 
 def verify_database_integrity(db: Session) -> bool:
     """
@@ -180,4 +246,4 @@ def verify_database_integrity(db: Session) -> bool:
         return False
 
 if __name__ == "__main__":
-    migrate_db()
+    init_db()

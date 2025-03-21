@@ -3,12 +3,36 @@ import re
 import sqlite3
 import os
 from datetime import datetime
-from app.database.models import get_db_connection, init_db
 from app.services.logging_utils import log_action
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Define our own database connection functions to avoid import issues
+def get_db_connection():
+    """Get a connection to the SQLite database"""
+    db_path = os.path.join('database', 'penalties.db')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    """Initialize database if needed"""
+    db_path = os.path.join('database', 'penalties.db')
+    logger.info(f"Checking database connection at {db_path}")
+    if not os.path.exists(os.path.dirname(db_path)):
+        os.makedirs(os.path.dirname(db_path))
+        logger.info(f"Created database directory: {os.path.dirname(db_path)}")
+    
+    # Just verify we can connect
+    try:
+        conn = get_db_connection()
+        conn.close()
+        logger.info("Database connection successful")
+    except Exception as e:
+        logger.error(f"Database connection error: {e}")
+        raise
 
 def truncate_table(cursor, table_name):
     """Truncate the specified table"""
