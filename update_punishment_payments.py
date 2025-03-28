@@ -74,7 +74,8 @@ def update_punishment_payments(csv_file_path):
             user_ids[row['user_name']] = row['user_id']
             
         # Get punishments that don't have a payment date in DB
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 penalty_id, 
                 u.user_name, 
@@ -84,7 +85,8 @@ def update_punishment_payments(csv_file_path):
             FROM punishments p
             JOIN users u ON p.user_id = u.user_id
             WHERE penalty_paid_date IS NULL
-        """)
+            """
+        )
         
         # Match and update records
         for record in cursor.fetchall():
@@ -99,11 +101,14 @@ def update_punishment_payments(csv_file_path):
                 logger.info(f"Updating payment for: {user_name} - {created_date} - {reason} - now paid on {paid_date}")
                 
                 # Update the record
-                cursor.execute("""
+                cursor.execute(
+                    """
                     UPDATE punishments 
                     SET penalty_paid_date = ? 
                     WHERE penalty_id = ?
-                """, (paid_date, penalty_id))
+                    """,
+                    (paid_date, penalty_id)
+                )
                 
                 updated_records += 1
         
