@@ -8,10 +8,9 @@ query = """
 SELECT `p`.`user_id`, `u`.`user_name`, `p`.`penalty_amount`, `p`.`penalty_reason`
 FROM `penalties` AS `p`
 JOIN `users` AS `u` ON `p`.`user_id` = `u`.`user_id`
-WHERE `p`.`penalty_archived` = 'NO' AND `p`.`penalty_paid_date` IS NULL
+WHERE `p`.`penalty_archived` = ? AND `p`.`penalty_paid_date` IS NULL
 """
-
-cursor.execute(query)
+cursor.execute(query, ('NO',))
 rows = cursor.fetchall()
 
 user_penalties = {}
