@@ -4,6 +4,10 @@ from typing import Optional
 import os
 from functools import lru_cache
 import secrets
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file
+load_dotenv()
 
 class Settings(BaseSettings):
     # API settings
@@ -109,3 +113,10 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get application settings with caching for better performance"""
     return Settings()
+
+class Settings:
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///database/penalties.db")
+    API_KEY: str = os.getenv("API_KEY", "default_api_key")
+    DEBUG: bool = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+
+settings = Settings()
