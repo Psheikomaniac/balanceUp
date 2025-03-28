@@ -1,58 +1,52 @@
-from typing import Optional, Dict, Any
+"""
+Custom exceptions for the application's security and validation features.
+"""
+from typing import Optional, Any
 
-class BaseError(Exception):
-    """Base exception class for application errors"""
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+class BaseAppException(Exception):
+    """Base exception class for the application"""
+    def __init__(self, message: str, status_code: int = 400, details: Optional[Any] = None):
         self.message = message
-        self.details = details or {}
+        self.status_code = status_code
+        self.details = details
         super().__init__(self.message)
 
-class DatabaseError(BaseError):
-    """Raised when a database operation fails"""
-    pass
+class FileValidationError(BaseAppException):
+    """Raised when file validation fails"""
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(message=message, status_code=400, details=details)
 
-class ResourceNotFoundException(BaseError):
-    """Raised when a requested resource is not found"""
-    pass
+class InputValidationError(BaseAppException):
+    """Raised when input validation fails"""
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(message=message, status_code=400, details=details)
 
-class ValidationError(BaseError):
-    """Raised when data validation fails"""
-    pass
+class SecurityError(BaseAppException):
+    """Raised when a security check fails"""
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(message=message, status_code=403, details=details)
 
-class AuthenticationError(BaseError):
-    """Raised when authentication fails"""
-    pass
-
-class AuthorizationError(BaseError):
-    """Raised when user lacks permission for an operation"""
-    pass
-
-class RateLimitExceededError(BaseError):
+class RateLimitExceededError(BaseAppException):
     """Raised when rate limit is exceeded"""
-    pass
+    def __init__(self, message: str = "Rate limit exceeded", details: Optional[Any] = None):
+        super().__init__(message=message, status_code=429, details=details)
 
-class BusinessLogicError(BaseError):
-    """Raised when a business rule is violated"""
-    def __init__(self, message: str, rule: str, details: Optional[Dict[str, Any]] = None):
-        super().__init__(message, details)
-        self.rule = rule
+class AuthenticationError(BaseAppException):
+    """Raised when authentication fails"""
+    def __init__(self, message: str = "Authentication failed", details: Optional[Any] = None):
+        super().__init__(message=message, status_code=401, details=details)
 
-class PaymentError(BusinessLogicError):
-    """Raised when a payment operation fails"""
-    pass
+class AuthorizationError(BaseAppException):
+    """Raised when authorization fails"""
+    def __init__(self, message: str = "Not authorized", details: Optional[Any] = None):
+        super().__init__(message=message, status_code=403, details=details)
 
-class InsufficientFundsError(PaymentError):
-    """Raised when user has insufficient funds"""
-    pass
+class ResourceNotFoundError(BaseAppException):
+    """Raised when a requested resource is not found"""
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(message=message, status_code=404, details=details)
 
-class DuplicateResourceError(DatabaseError):
-    """Raised when attempting to create a duplicate resource"""
-    pass
-
-class DataIntegrityError(DatabaseError):
-    """Raised when data integrity is violated"""
-    pass
-
-class ConfigurationError(BaseError):
-    """Raised when there's a configuration issue"""
-    pass
+class DatabaseError(BaseAppException):
+    """Raised when a database operation fails"""
+    def __init__(self, message: str, details: Optional[Any] = None):
+        super().__init__(message=message, status_code=500, details=details)

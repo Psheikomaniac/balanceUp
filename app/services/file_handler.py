@@ -1,239 +1,278 @@
+"""
+Secure file handling service.
+
+This module provides a secure file handling service for safely interacting with
+files in the system. It implements security best practices for file operations
+including:
+- Path traversal prevention
+- File access control based on allowed directories
+- File extension validation
+- Content validation
+- File size limits
+- Hash verification
+
+All file operations should use this service rather than direct file system access
+to ensure consistent security controls are applied.
+"""
 import os
 import shutil
-import csv
-from datetime import datetime
-from typing import List, Dict, Optional, Any
-from pathlib import Path
+import hashlib
+from typing import List, Tuple, Optional
+import logging
 
-from app.utils.logging_config import get_logger
-from app.config.settings import get_settings
-from app.errors.exceptions import FileProcessingException
+from app.utils.file_validation import (
+    validate_filename,
+    validate_file_path,
+    validate_file_content,
+    is_file_size_valid
+)
+from app.errors.exceptions import FileValidationError, SecurityError
 
-settings = get_settings()
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
-class FileHandler:
-    """Centralized class for handling file operations"""
+def compute_file_hash(file_path: str, algorithm: str = 'sha256') -> str:
+    """
+    Compute the hash of a file using the specified algorithm.
     
-    def __init__(self, base_dir: str = None):
-        self.base_dir = base_dir or settings.IMPORT_DIRECTORY
-        self.archive_dir = settings.ARCHIVE_DIRECTORY
+    Args:
+        file_path: Path to the file
+        algorithm: Hash algorithm to use (default: sha256)
         
-        # Ensure directories exist
-        os.makedirs(self.base_dir, exist_ok=True)
-        os.makedirs(self.archive_dir, exist_ok=True)
+    Returns:
+        str: Hexadecimal digest of the file hash
+    """
+    hash_obj = hashlib.new(algorithm)
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b''):
+            hash_obj.update(chunk)
+    return hash_obj.hexdigest()
+
+class SecureFileHandler:
+    """
+    Secure file handler for safely performing file operations.
     
-    def list_files(self, directory: str = None, pattern: str = None) -> List[str]:
+    This class provides methods for securely reading, writing, and manipulating
+    files with proper validation and security controls.
+    """
+    
+    def __init__(
+        self,
+        allowed_dirs: List[str],
+        allowed_extensions: List[str],
+        max_file_size: int = 10 * 1024 * 1024,  # 10MB default
+    ):
         """
-        List files in a directory, optionally filtering by pattern
+        Initialize the secure file handler.
         
         Args:
-            directory: Directory to list files from (defaults to base_dir)
-            pattern: Optional filename pattern to filter by
-            
-        Returns:
-            List of file paths
+            allowed_dirs: List of directories that can be accessed
+            allowed_extensions: List of allowed file extensions (including dot)
+            max_file_size: Maximum allowed file size in bytes
         """
-        target_dir = directory or self.base_dir
+        self.allowed_dirs = [os.path.abspath(d) for d in allowed_dirs]
+        self.allowed_extensions = [ext.lower() for ext in allowed_extensions]
+        self.max_file_size = max_file_size
+        logger.info(f"Initialized SecureFileHandler with {len(allowed_dirs)} allowed directories")
         
-        try:
-            if not os.path.exists(target_dir):
-                logger.warning(f"Directory does not exist: {target_dir}")
-                return []
-                
-            files = [f for f in os.listdir(target_dir) if os.path.isfile(os.path.join(target_dir, f))]
-            
-            if pattern:
-                import fnmatch
-                files = [f for f in files if fnmatch.fnmatch(f, pattern)]
-                
-            return [os.path.join(target_dir, f) for f in files]
-        except Exception as e:
-            logger.error(f"Error listing files in {target_dir}: {str(e)}")
-            raise FileProcessingException(f"Failed to list files: {str(e)}", target_dir)
-    
-    def standardize_filename(self, filepath: str) -> str:
+    def validate_file(self, file_path: str) -> Tuple[bool, str]:
         """
-        Standardize filename to format: YYYYMMDD_HHMMSS_type.csv
+        Validate if a file meets all security requirements.
         
         Args:
-            filepath: Path to the file to standardize
+            file_path: Path to the file to validate
             
         Returns:
-            New standardized filepath
+            Tuple[bool, str]: (is_valid, validation_message)
+            
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
         """
-        try:
-            file_dir = os.path.dirname(filepath)
-            filename = os.path.basename(filepath)
-            
-            # Extract date from filename if it exists in various formats
-            date_formats = [
-                # DD-MM-YYYY
-                (r'(\d{2})-(\d{2})-(\d{4})', lambda m: f"{m.group(3)}{m.group(2)}{m.group(1)}"),
-                # DD.MM.YYYY
-                (r'(\d{2})\.(\d{2})\.(\d{4})', lambda m: f"{m.group(3)}{m.group(2)}{m.group(1)}"),
-                # YYYY-MM-DD
-                (r'(\d{4})-(\d{2})-(\d{2})', lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}"),
-            ]
-            
-            import re
-            date_str = None
-            for pattern, formatter in date_formats:
-                match = re.search(pattern, filename)
-                if match:
-                    date_str = formatter(match)
-                    break
-            
-            # If no date found, use current date
-            if not date_str:
-                date_str = datetime.now().strftime("%Y%m%d")
-            
-            # Determine file type from name
-            file_type = "unknown"
-            if "punishment" in filename.lower() or "penalties" in filename.lower():
-                file_type = "punishments"
-            elif "transaction" in filename.lower():
-                file_type = "transactions"
-            elif "due" in filename.lower() or "dues" in filename.lower():
-                file_type = "dues"
-            
-            # Generate timestamp
-            timestamp = datetime.now().strftime("%H%M%S")
-            
-            # Create new filename
-            new_filename = f"{date_str}_{timestamp}_{file_type}.csv"
-            new_filepath = os.path.join(file_dir, new_filename)
-            
-            # Rename file
-            os.rename(filepath, new_filepath)
-            logger.info(f"Renamed file: {filename} -> {new_filename}")
-            
-            return new_filepath
-        except Exception as e:
-            logger.error(f"Error standardizing filename {filepath}: {str(e)}")
-            raise FileProcessingException(f"Failed to standardize filename: {str(e)}", filepath)
+        file_path = os.path.abspath(file_path)
+        
+        # Check if file exists
+        if not os.path.isfile(file_path):
+            raise FileValidationError(f"File does not exist: {file_path}")
+        
+        # Check if file is in allowed directory
+        parent_dir = os.path.dirname(file_path)
+        if not any(os.path.commonpath([parent_dir, allowed_dir]) == allowed_dir 
+                  for allowed_dir in self.allowed_dirs):
+            logger.warning(f"File access denied for path: {file_path}")
+            raise SecurityError(f"File access denied: {file_path}")
+        
+        # Validate filename
+        filename = os.path.basename(file_path)
+        if not validate_filename(filename):
+            raise FileValidationError(f"Invalid filename: {filename}")
+        
+        # Validate file extension
+        _, ext = os.path.splitext(file_path)
+        if ext.lower() not in self.allowed_extensions:
+            raise FileValidationError(f"Unsupported file extension: {ext}")
+        
+        # Validate file path
+        if not validate_file_path(file_path):
+            raise SecurityError(f"Invalid file path: {file_path}")
+        
+        # Validate file size
+        if not is_file_size_valid(file_path, self.max_file_size):
+            raise FileValidationError(
+                f"File size exceeds maximum allowed size ({self.max_file_size} bytes)"
+            )
+        
+        # Validate file content
+        content_valid, message = validate_file_content(file_path, ext.lower())
+        if not content_valid:
+            raise FileValidationError(f"File content validation failed: {message}")
+        
+        return True, "File validation successful"
     
-    def read_csv(self, filepath: str, delimiter: str = ',', has_header: bool = True) -> List[Dict[str, str]]:
+    def read_file(self, file_path: str) -> str:
         """
-        Read CSV file and return a list of dictionaries
+        Securely read the contents of a file.
         
         Args:
-            filepath: Path to the CSV file
-            delimiter: CSV delimiter character
-            has_header: Whether the CSV has a header row
+            file_path: Path to the file to read
             
         Returns:
-            List of dictionaries where keys are column names (or indices if no header)
+            str: Contents of the file
+            
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
         """
+        self.validate_file(file_path)
+        
         try:
-            result = []
-            
-            with open(filepath, 'r', encoding='utf-8') as file:
-                if has_header:
-                    reader = csv.DictReader(file, delimiter=delimiter)
-                    result = list(reader)
-                else:
-                    reader = csv.reader(file, delimiter=delimiter)
-                    rows = list(reader)
-                    # Use column indices as keys
-                    for row in rows:
-                        result.append({str(i): val for i, val in enumerate(row)})
-            
-            logger.info(f"Read {len(result)} rows from {filepath}")
-            return result
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            logger.debug(f"Successfully read file: {file_path}")
+            return content
         except Exception as e:
-            logger.error(f"Error reading CSV file {filepath}: {str(e)}")
-            raise FileProcessingException(f"Failed to read CSV file: {str(e)}", filepath)
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            raise FileValidationError(f"Error reading file: {str(e)}")
     
-    def write_csv(self, filepath: str, data: List[Dict[str, Any]], fieldnames: List[str] = None, 
-                 delimiter: str = ',') -> str:
+    def save_file(self, file_path: str, destination_dir: str, new_filename: Optional[str] = None) -> str:
         """
-        Write list of dictionaries to CSV file
+        Securely save a file to a new location.
         
         Args:
-            filepath: Path to write the CSV file
-            data: List of dictionaries to write
-            fieldnames: List of field names (columns) to include
-            delimiter: CSV delimiter character
+            file_path: Path to the source file
+            destination_dir: Directory to save the file to
+            new_filename: New filename (if None, original filename is used)
             
         Returns:
-            Path to the written file
+            str: Path to the saved file
+            
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
         """
+        self.validate_file(file_path)
+        
+        # Validate destination directory
+        destination_dir = os.path.abspath(destination_dir)
+        if not any(os.path.commonpath([destination_dir, allowed_dir]) == allowed_dir 
+                  for allowed_dir in self.allowed_dirs):
+            logger.warning(f"Destination directory access denied: {destination_dir}")
+            raise SecurityError(f"Destination directory access denied: {destination_dir}")
+        
+        # Ensure destination directory exists
+        if not os.path.exists(destination_dir):
+            os.makedirs(destination_dir, exist_ok=True)
+        
+        # Determine target filename
+        if new_filename is None:
+            new_filename = os.path.basename(file_path)
+        
+        # Validate new filename
+        if not validate_filename(new_filename):
+            raise FileValidationError(f"Invalid new filename: {new_filename}")
+        
+        # Construct destination path
+        destination_path = os.path.join(destination_dir, new_filename)
+        
+        # Copy the file
         try:
-            if not data:
-                logger.warning(f"No data to write to {filepath}")
-                return filepath
-                
-            if not fieldnames:
-                fieldnames = list(data[0].keys())
-                
-            with open(filepath, 'w', encoding='utf-8', newline='') as file:
-                writer = csv.DictWriter(file, fieldnames=fieldnames, delimiter=delimiter)
-                writer.writeheader()
-                writer.writerows(data)
-                
-            logger.info(f"Wrote {len(data)} rows to {filepath}")
-            return filepath
+            shutil.copy2(file_path, destination_path)
+            logger.info(f"Successfully saved file to: {destination_path}")
+            return destination_path
         except Exception as e:
-            logger.error(f"Error writing CSV file {filepath}: {str(e)}")
-            raise FileProcessingException(f"Failed to write CSV file: {str(e)}", filepath)
+            logger.error(f"Error saving file to {destination_path}: {str(e)}")
+            raise FileValidationError(f"Error saving file: {str(e)}")
     
-    def archive_file(self, filepath: str) -> str:
+    def move_file(self, file_path: str, destination_dir: str, new_filename: Optional[str] = None) -> str:
         """
-        Move a file to the archive directory
+        Securely move a file to a new location.
         
         Args:
-            filepath: Path to the file to archive
+            file_path: Path to the source file
+            destination_dir: Directory to move the file to
+            new_filename: New filename (if None, original filename is used)
             
         Returns:
-            Path to the archived file
+            str: Path to the moved file
+            
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
         """
+        # Save the file first
+        destination_path = self.save_file(file_path, destination_dir, new_filename)
+        
+        # Remove the original file
         try:
-            filename = os.path.basename(filepath)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_filename = f"{timestamp}_{filename}"
-            archive_path = os.path.join(self.archive_dir, archive_filename)
-            
-            shutil.move(filepath, archive_path)
-            logger.info(f"Archived file: {filepath} -> {archive_path}")
-            
-            return archive_path
+            os.remove(file_path)
+            logger.info(f"Successfully moved file from {file_path} to {destination_path}")
+            return destination_path
         except Exception as e:
-            logger.error(f"Error archiving file {filepath}: {str(e)}")
-            raise FileProcessingException(f"Failed to archive file: {str(e)}", filepath)
+            logger.error(f"Error removing original file {file_path}: {str(e)}")
+            raise FileValidationError(f"Error moving file: {str(e)}")
     
-    def detect_file_type(self, filepath: str) -> Optional[str]:
+    def delete_file(self, file_path: str) -> bool:
         """
-        Detect file type from content or name
+        Securely delete a file.
         
         Args:
-            filepath: Path to the file
+            file_path: Path to the file to delete
             
         Returns:
-            Detected file type or None if unknown
-        """
-        filename = os.path.basename(filepath).lower()
-        
-        if "punishment" in filename or "penalties" in filename:
-            return "punishments"
-        elif "transaction" in filename:
-            return "transactions"
-        elif "due" in filename or "dues" in filename:
-            return "dues"
+            bool: True if the file was successfully deleted
             
-        # If can't determine from name, try to inspect the file
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
+        """
+        self.validate_file(file_path)
+        
         try:
-            with open(filepath, 'r', encoding='utf-8') as file:
-                header = file.readline().lower()
-                
-                if any(x in header for x in ["punishment", "penalty", "fine", "violation"]):
-                    return "punishments"
-                elif any(x in header for x in ["transaction", "payment"]):
-                    return "transactions"
-                elif any(x in header for x in ["due", "dues", "membership"]):
-                    return "dues"
-                    
-            return None
+            os.remove(file_path)
+            logger.info(f"Successfully deleted file: {file_path}")
+            return True
         except Exception as e:
-            logger.warning(f"Error detecting file type for {filepath}: {str(e)}")
-            return None
+            logger.error(f"Error deleting file {file_path}: {str(e)}")
+            raise FileValidationError(f"Error deleting file: {str(e)}")
+            
+    def get_file_hash(self, file_path: str, algorithm: str = 'sha256') -> str:
+        """
+        Get the hash of a file.
+        
+        Args:
+            file_path: Path to the file
+            algorithm: Hash algorithm to use (default: sha256)
+            
+        Returns:
+            str: Hexadecimal digest of the file hash
+            
+        Raises:
+            FileValidationError: If file validation fails
+            SecurityError: If a security violation is detected
+        """
+        self.validate_file(file_path)
+        
+        try:
+            return compute_file_hash(file_path, algorithm)
+        except Exception as e:
+            logger.error(f"Error computing hash for file {file_path}: {str(e)}")
+            raise FileValidationError(f"Error computing file hash: {str(e)}")
