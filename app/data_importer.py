@@ -15,9 +15,6 @@ def get_db_connection():
     db_path = os.path.join('database', 'penalties.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    # Enable faster transactions
-    conn.execute('PRAGMA journal_mode = WAL')
-    conn.execute('PRAGMA synchronous = NORMAL')
     return conn
 
 def init_db():
