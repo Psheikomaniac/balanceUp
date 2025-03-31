@@ -1,4 +1,7 @@
-from fastapi import FastAPI, Request, status
+"""
+Error handlers for FastAPI application
+"""
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.errors.exceptions import (
     BaseError,
@@ -18,7 +21,7 @@ from app.errors.exceptions import (
 from app.database.schemas import ErrorResponse
 from app.utils.logging_config import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 async def base_error_handler(request: Request, exc: BaseError) -> JSONResponse:
     """Base error handler for all custom exceptions"""

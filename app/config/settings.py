@@ -108,7 +108,6 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-# Cache settings to avoid reloading configuration on every request
 @lru_cache
 def get_settings() -> Settings:
     """Get application settings with caching for better performance"""

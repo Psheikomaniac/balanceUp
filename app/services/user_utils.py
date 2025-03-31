@@ -22,10 +22,8 @@ def display_user_ids(db_path: str) -> List[tuple]:
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
     cursor.execute('SELECT user_id, user_name FROM users ORDER BY user_name')
     users = cursor.fetchall()
-    
     conn.close()
     return users
 
@@ -42,10 +40,8 @@ def validate_user_id(db_path: str, user_id: int) -> bool:
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
     cursor.execute('SELECT COUNT(*) FROM users WHERE user_id = ?', (user_id,))
     count = cursor.fetchone()[0]
-    
     conn.close()
     return count > 0
 
